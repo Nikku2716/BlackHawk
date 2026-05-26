@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content="Z-Scanner — Web application security scanner powered by OWASP ZAP. Identify vulnerabilities with automated scanning." />
+    <title>Z-Scanner — Web Application Security Scanner</title>
+
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <div class="app">
+        <!-- Header -->
+        <header class="header" id="header">
+            <div class="header__brand">
+                <svg class="header__mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                    <rect width="32" height="32" rx="4" fill="currentColor"/>
+                    <path d="M9 22L16 10L23 22H9Z" stroke="#fff" stroke-width="1.5" fill="none"/>
+                    <circle cx="16" cy="18" r="2" fill="#fff"/>
+                </svg>
+                <span class="header__name">Z-Scanner</span>
+            </div>
+            <nav class="header__meta">
+                <time class="header__clock" id="hudClock" aria-live="polite">--:--</time>
+            </nav>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Scan Input -->
+            <section class="section section--input" id="scanInputCard">
+                <div class="hero">
+                    <h1 class="hero__title">Scan your web application<br/>for vulnerabilities</h1>
+                    <p class="hero__desc">Automated security assessment powered by OWASP ZAP. Enter a target URL to begin vulnerability analysis.</p>
+                </div>
+
+                <div class="search" id="scanForm">
+                    <div class="search__field">
+                        <label for="targetUrl" class="sr-only">Target URL</label>
+                        <input
+                            type="url"
+                            id="targetUrl"
+                            class="search__input"
+                            placeholder="https://example.com"
+                            autocomplete="url"
+                            spellcheck="false"
+                            required
+                        />
+                        <button type="button" class="search__btn" id="scanBtn" aria-label="Start scan">
+                            <svg class="search__btn-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M5 10h10M12 7l3 3-3 3"/>
+                            </svg>
+                            <span class="search__btn-text">Scan</span>
+                            <div class="search__btn-loader" aria-hidden="true">
+                                <span></span><span></span><span></span>
+                            </div>
+                        </button>
+                    </div>
+                    <p class="search__hint" id="urlHint">Include protocol — http:// or https://</p>
+                </div>
+
+                <div class="scan-modes" id="scanModes">
+                    <div class="scan-mode" data-mode="quick">
+                        <div class="scan-mode__header">
+                            <svg class="scan-mode__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                            </svg>
+                            <span class="scan-mode__name">Quick</span>
+                            <span class="scan-mode__time">~1-2 min</span>
+                        </div>
+                        <p class="scan-mode__desc">Surface-level scan. Checks headers, cookies, and basic misconfigurations only.</p>
+                    </div>
+                    <div class="scan-mode scan-mode--selected" data-mode="fast">
+                        <div class="scan-mode__header">
+                            <svg class="scan-mode__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <polyline points="12 6 12 12 16 14"/>
+                            </svg>
+                            <span class="scan-mode__name">Fast</span>
+                            <span class="scan-mode__time">~3-5 min</span>
+                        </div>
+                        <p class="scan-mode__desc">Standard vulnerability scan with limited depth. Good balance of speed and coverage.</p>
+                    </div>
+                    <div class="scan-mode" data-mode="deep">
+                        <div class="scan-mode__header">
+                            <svg class="scan-mode__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                                <path d="M9 12l2 2 4-4"/>
+                            </svg>
+                            <span class="scan-mode__name">Deep</span>
+                            <span class="scan-mode__time">~10-30 min</span>
+                        </div>
+                        <p class="scan-mode__desc">Comprehensive scan with full OWASP Top 10 coverage. Maximum attack depth and thoroughness.</p>
+                    </div>
+                    <div class="scan-mode" data-mode="stealth">
+                        <div class="scan-mode__header">
+                            <svg class="scan-mode__icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                                <circle cx="12" cy="12" r="3"/>
+                                <line x1="1" y1="1" x2="23" y2="23"/>
+                            </svg>
+                            <span class="scan-mode__name">Stealth</span>
+                            <span class="scan-mode__time">~2-5 min</span>
+                        </div>
+                        <p class="scan-mode__desc">Passive-only scan. No active probing — observes traffic silently. Ideal for production.</p>
+                    </div>
+                </div>
+
+                <p class="error-msg" id="errorMsg" role="alert"></p>
+
+                <!-- Features -->
+                <div class="features">
+                    <div class="feature">
+                        <div class="feature__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10"/>
+                                <path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature__title">Endpoint Discovery</h3>
+                        <p class="feature__desc">Deep-crawl target URLs to map all attack surfaces through automated spidering.</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature__title">Active & Passive Analysis</h3>
+                        <p class="feature__desc">Scan for OWASP Top 10 including XSS, SQL injection, broken auth, and misconfigurations.</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature__title">Real-Time Tracking</h3>
+                        <p class="feature__desc">Instantaneous feedback with live progress percentages for every ongoing scan.</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                                <polyline points="14 2 14 8 20 8"/>
+                                <line x1="16" y1="13" x2="8" y2="13"/>
+                                <line x1="16" y1="17" x2="8" y2="17"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature__title">Structured Reporting</h3>
+                        <p class="feature__desc">Findings categorized by risk severity — High, Medium, Low, and Informational.</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature__title">Session Isolation</h3>
+                        <p class="feature__desc">Auto-cleanup and reset between scans to prevent data contamination.</p>
+                    </div>
+                    <div class="feature">
+                        <div class="feature__icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="6" width="20" height="12" rx="2"/>
+                                <path d="M6 12h4M14 12h4M12 6v12"/>
+                            </svg>
+                        </div>
+                        <h3 class="feature__title">Docker Sandboxed</h3>
+                        <p class="feature__desc">All scan operations run isolated inside Docker containers over a private network.</p>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Progress -->
+            <section class="section section--progress hidden" id="progressCard">
+                <div class="section__head">
+                    <h2 class="section__title">Scanning</h2>
+                    <p class="section__subtitle" id="scanTarget">Acquiring target…</p>
+                </div>
+
+                <div class="progress-group">
+                    <div class="progress-row">
+                        <div class="progress-row__meta">
+                            <span class="progress-row__label">Spider crawl</span>
+                            <span class="progress-row__value" id="spiderPercent">0%</span>
+                        </div>
+                        <div class="progress-row__track">
+                            <div class="progress-row__bar" id="spiderBar" style="width: 0%" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+
+                    <div class="progress-row">
+                        <div class="progress-row__meta">
+                            <span class="progress-row__label">Active scan</span>
+                            <span class="progress-row__value" id="activePercent">0%</span>
+                        </div>
+                        <div class="progress-row__track">
+                            <div class="progress-row__bar progress-row__bar--secondary" id="activeBar" style="width: 0%" role="progressbar" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="phase-status" id="scanPhaseLabel">
+                    <span class="phase-status__dot"></span>
+                    <span>Initializing scanner…</span>
+                </div>
+
+                <button type="button" class="btn btn--stop hidden" id="stopBtn">
+                    <svg class="btn__icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="4" y="4" width="12" height="12" rx="2"/>
+                    </svg>
+                    Stop scan
+                </button>
+            </section>
+
+            <!-- Results -->
+            <section class="section section--results hidden" id="resultsCard">
+                <div class="section__head">
+                    <h2 class="section__title">Results</h2>
+                    <p class="section__subtitle" id="resultsSummaryText">Vulnerability assessment finalized</p>
+                </div>
+
+                <!-- Summary Stats -->
+                <div class="stats" id="statsGrid">
+                    <div class="stat stat--high">
+                        <span class="stat__value" id="statHigh">0</span>
+                        <span class="stat__label">High</span>
+                    </div>
+                    <div class="stat stat--medium">
+                        <span class="stat__value" id="statMedium">0</span>
+                        <span class="stat__label">Medium</span>
+                    </div>
+                    <div class="stat stat--low">
+                        <span class="stat__value" id="statLow">0</span>
+                        <span class="stat__label">Low</span>
+                    </div>
+                    <div class="stat stat--total">
+                        <span class="stat__value" id="statTotal">0</span>
+                        <span class="stat__label">Total</span>
+                    </div>
+                </div>
+
+                <!-- Filters -->
+                <div class="filters" id="filterTabs">
+                    <button class="filter active" data-filter="all">All</button>
+                    <button class="filter filter--high" data-filter="High">High</button>
+                    <button class="filter filter--medium" data-filter="Medium">Medium</button>
+                    <button class="filter filter--low" data-filter="Low">Low</button>
+                </div>
+
+                <!-- Alert List -->
+                <div class="alerts" id="alertsList"></div>
+
+                <!-- New Scan -->
+                <button type="button" class="btn btn--outline" id="newScanBtn">
+                    <svg class="btn__icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17.65 6.35A8 8 0 1 0 19 12"/>
+                        <polyline points="17 2 17 7 12 7"/>
+                    </svg>
+                    New scan
+                </button>
+            </section>
+
+            <!-- Error -->
+            <section class="section section--error hidden" id="errorCard">
+                <div class="section__head">
+                    <h2 class="section__title">Scan failed</h2>
+                    <p class="section__subtitle" id="errorDetail">Connection terminated unexpectedly</p>
+                </div>
+                <button type="button" class="btn btn--outline" id="retryBtn">
+                    <svg class="btn__icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17.65 6.35A8 8 0 1 0 19 12"/>
+                        <polyline points="17 2 17 7 12 7"/>
+                    </svg>
+                    Retry
+                </button>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <div class="footer__inner">
+                <p class="footer__line">Z-Scanner v1.0 — Powered by OWASP ZAP</p>
+                <div class="footer__credits">
+                    <span>Made by digininja.sh</span>
+                    <span class="footer__sep" aria-hidden="true"></span>
+                    <span>Opensource</span>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>

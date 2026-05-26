@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  zap:
+    image: docker.io/zaproxy/zap-stable
+    container_name: zscanner-zap
+    command: >
+      zap.sh -daemon -host 0.0.0.0 -port 8080
+      -config api.disablekey=true
+      -config api.addrs.addr.name=.*
+      -config api.addrs.addr.regex=true
+    ports:
+      - "8080:8080"
+    networks:
+      - zscanner-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/JSON/core/view/version/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+  scanner-api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: zscanner-api
+    ports:
+      - "8000:8000"
+    environment:
+      - ZAP_API_URL=http://zap:8080
+    depends_on:
+      zap:
+        condition: service_healthy
+    volumes:
+      - ./frontend:/app/frontend:ro
+    networks:
+      - zscanner-net
+
+networks:
+  zscanner-net:
+    driver: bridge
