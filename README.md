@@ -8,7 +8,7 @@
 
 # Z-Scanner
 
-**Z-Scanner** is a web application security scanner powered by [OWASP ZAP](https://www.zaproxy.org/). It provides a clean, real-time dashboard to spider websites, run active vulnerability scans, and inspect findings — all from your browser.
+**Z-Scanner** is a web application security scanner powered by [OWASP ZAP](https://www.zaproxy.org/). It provides a clean, real-time dashboard to spider websites, run active vulnerability scans, and inspect findings -- all from your browser.
 
 Built with a **FastAPI** backend and a vanilla **HTML/CSS/JS** frontend, orchestrated via Docker Compose.
 
@@ -16,21 +16,21 @@ Built with a **FastAPI** backend and a vanilla **HTML/CSS/JS** frontend, orchest
 
 ## Features
 
-- **4 Scan Modes** — Quick, Fast, Deep, Stealth (each with different depth/CPU profiles)
-- **Real-Time Progress** — Live spider + active scan percentage updates
-- **Risk-Based Filtering** — Filter alerts by High / Medium / Low severity
-- **Stop & Retry** — Cancel running scans, start new ones instantly
-- **OWASP Top 10 Coverage** — Scans for XSS, SQL injection, broken auth, misconfigurations, and more
+- **4 Scan Modes** -- Quick, Fast, Deep, Stealth (each with different depth/CPU profiles)
+- **Real-Time Progress** -- Live spider + active scan percentage updates
+- **Risk-Based Filtering** -- Filter alerts by High / Medium / Low severity
+- **Stop & Retry** -- Cancel running scans, start new ones instantly
+- **OWASP Top 10 Coverage** -- Scans for XSS, SQL injection, broken auth, misconfigurations, and more
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────┐     ┌──────────────────┐     ┌──────────────────┐
+┌─────────────────┐      ┌──────────────────┐      ┌──────────────────┐
 │   Browser       │────▶│  FastAPI Server  │────▶│  OWASP ZAP       │
 │  (Frontend)     │◀────│  (Backend)       │◀────│  (Scanner Engine)│
-└─────────────────┘     └──────────────────┘     └──────────────────┘
+└─────────────────┘      └──────────────────┘      └──────────────────┘
         │                        │
     index.html              main.py
     app.js                  scanner.py
@@ -41,10 +41,10 @@ Built with a **FastAPI** backend and a vanilla **HTML/CSS/JS** frontend, orchest
 
 | Mode    | Spider Threads | Max Children | Active Scan | Strength | Threshold | Description |
 |---------|---------------|-------------|-------------|----------|-----------|-------------|
-| Quick   | 1             | 5           | No          | —        | —         | Surface-level — headers, cookies, basic misconfig |
+| Quick   | 1             | 5           | No          | —        | —         | Surface-level -- headers, cookies, basic misconfig |
 | Fast    | 3             | 10          | Yes         | LOW      | MEDIUM    | Standard scan with limited attack depth |
 | Deep    | 5             | Unlimited   | Yes         | HIGH     | LOW       | Comprehensive full-depth vulnerability scan |
-| Stealth | 1             | 10          | No          | —        | —         | Passive only — zero noise on target |
+| Stealth | 1             | 10          | No          | —        | —         | Passive only -- zero noise on target |
 
 ---
 
