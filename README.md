@@ -6,7 +6,7 @@
   <br/><br/>
 </div>
 
-                                                                            # Z-Scanner
+ # Z-Scanner
 
 **Z-Scanner** is a web application security scanner powered by [OWASP ZAP](https://www.zaproxy.org/). It provides a clean, real-time dashboard to spider websites, run active vulnerability scans, and inspect findings -- all from your browser.
 
