@@ -37,15 +37,33 @@
         errorDetail:     $("#errorDetail"),
         hudClock:        $("#hudClock"),
         scanModes:       $("#scanModes"),
+        tocList:         $(".toc__list"),
     };
 
     let currentScanId = null;
     let pollTimer = null;
     let allAlerts = [];
     let selectedScanMode = "fast";
+    let stoppingInProgress = false;
+
+    // Track which sections are "available" (have been visited/have data)
+    const sectionAvailability = {
+        scanInputCard: true,
+        progressCard: false,
+        resultsCard: false,
+        errorCard: false,
+    };
 
     const API_BASE = window.location.origin;
     const POLL_INTERVAL_MS = 1500;
+
+    // Map section IDs to their cards
+    const sectionCards = {
+        scanInputCard: dom.scanInputCard,
+        progressCard:  dom.progressCard,
+        resultsCard:   dom.resultsCard,
+        errorCard:     dom.errorCard,
+    };
 
     function updateClock() {
         const now = new Date();
@@ -56,6 +74,61 @@
     updateClock();
     setInterval(updateClock, 1000);
 
+    // ------------------------------------------------------------------
+    // TOC navigation
+    // ------------------------------------------------------------------
+    function setTocActive(sectionId) {
+        $$(".toc__link").forEach((link) => {
+            link.classList.remove("toc__link--active");
+        });
+        const activeLink = $(`.toc__link[data-target="${sectionId}"]`);
+        if (activeLink) {
+            activeLink.classList.add("toc__link--active");
+        }
+    }
+
+    function enableTocLink(sectionId) {
+        const link = $(`.toc__link[data-target="${sectionId}"]`);
+        if (link) {
+            link.classList.remove("toc__link--disabled");
+            sectionAvailability[sectionId] = true;
+        }
+    }
+
+    function disableTocLink(sectionId) {
+        const link = $(`.toc__link[data-target="${sectionId}"]`);
+        if (link) {
+            link.classList.add("toc__link--disabled");
+            sectionAvailability[sectionId] = false;
+        }
+    }
+
+    function resetTocLinks() {
+        // Enable only Scan, disable the rest
+        enableTocLink("scanInputCard");
+        disableTocLink("progressCard");
+        disableTocLink("resultsCard");
+        disableTocLink("errorCard");
+    }
+
+    function handleTocClick(e) {
+        const link = e.target.closest(".toc__link");
+        if (!link) return;
+        e.preventDefault();
+
+        if (link.classList.contains("toc__link--disabled")) return;
+
+        const targetId = link.dataset.target;
+        const card = sectionCards[targetId];
+        if (!card) return;
+
+        showCard(card);
+        setTocActive(targetId);
+    }
+
+    // ------------------------------------------------------------------
+    // Card visibility
+    // ------------------------------------------------------------------
     function showCard(cardEl) {
         [dom.scanInputCard, dom.progressCard, dom.resultsCard, dom.errorCard]
             .forEach((c) => c.classList.add("hidden"));
@@ -68,6 +141,14 @@
             dom.stopBtn.classList.remove("hidden");
         } else {
             dom.stopBtn.classList.add("hidden");
+        }
+
+        // Update TOC active state to match the shown card
+        for (const [id, el] of Object.entries(sectionCards)) {
+            if (el === cardEl) {
+                setTocActive(id);
+                break;
+            }
         }
     }
 
@@ -133,6 +214,9 @@
         return res.json();
     }
 
+    // ------------------------------------------------------------------
+    // Scan lifecycle
+    // ------------------------------------------------------------------
     async function startScan() {
         const url = dom.targetUrl.value.trim();
 
@@ -149,6 +233,7 @@
         }
 
         dom.scanBtn.classList.add("loading");
+        stoppingInProgress = false;
 
         try {
             const data = await apiPost("/api/scan", { target_url: url, scan_mode: selectedScanMode });
@@ -158,6 +243,11 @@
             setProgress(dom.activeBar, dom.activePercent, 0);
             setPhaseLabel("idle");
             dom.scanTarget.textContent = url;
+
+            // Enable Progress in TOC, disable Results/Errors
+            enableTocLink("progressCard");
+            disableTocLink("resultsCard");
+            disableTocLink("errorCard");
 
             showCard(dom.progressCard);
             beginPolling();
@@ -191,6 +281,7 @@
                 clearInterval(pollTimer);
                 pollTimer = null;
                 dom.stopBtn.classList.add("hidden");
+                stoppingInProgress = false;
                 setPhaseLabel("stopped");
                 await showResults();
             } else if (status.phase === "error") {
@@ -217,6 +308,10 @@
             allAlerts = data.alerts || [];
             renderAlerts(allAlerts);
             resetFilterTabs();
+
+            // Enable Results in TOC
+            enableTocLink("resultsCard");
+
             showCard(dom.resultsCard);
         } catch (err) {
             showError(err.message);
@@ -225,17 +320,26 @@
 
     function showError(message) {
         dom.errorDetail.textContent = message;
+
+        // Enable Errors in TOC
+        enableTocLink("errorCard");
+
         showCard(dom.errorCard);
     }
 
     function resetScan() {
         currentScanId = null;
         allAlerts = [];
+        stoppingInProgress = false;
         dom.targetUrl.value = "";
         dom.errorMsg.textContent = "";
         selectedScanMode = "fast";
         $$(".scan-mode").forEach((m) => m.classList.remove("scan-mode--selected"));
         $(".scan-mode[data-mode='fast']").classList.add("scan-mode--selected");
+
+        // Reset TOC — only Scan is available
+        resetTocLinks();
+
         showCard(dom.scanInputCard);
         dom.targetUrl.focus();
     }
@@ -340,6 +444,9 @@
         header.setAttribute("aria-expanded", item.classList.contains("open"));
     }
 
+    // ------------------------------------------------------------------
+    // Event bindings
+    // ------------------------------------------------------------------
     dom.scanBtn.addEventListener("click", startScan);
 
     dom.targetUrl.addEventListener("keydown", (e) => {
@@ -347,13 +454,19 @@
     });
 
     dom.stopBtn.addEventListener("click", async () => {
-        if (!currentScanId) return;
+        if (!currentScanId || stoppingInProgress) return;
+        stoppingInProgress = true;
         dom.stopBtn.disabled = true;
         dom.stopBtn.textContent = "Stopping…";
         try {
             await apiPost(`/api/stop/${currentScanId}`, {});
+            // Immediately poll once to get the stopped state faster
+            setTimeout(pollStatus, 300);
         } catch (err) {
             console.error("Stop error:", err);
+            stoppingInProgress = false;
+            dom.stopBtn.disabled = false;
+            dom.stopBtn.textContent = "Stop scan";
         }
     });
 
@@ -374,6 +487,9 @@
     });
 
     dom.scanModes.addEventListener("click", handleModeSelect);
+
+    // TOC navigation click handler
+    dom.tocList.addEventListener("click", handleTocClick);
 
     dom.targetUrl.focus();
 })();

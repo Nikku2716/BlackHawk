@@ -6,33 +6,42 @@
     <meta name="description" content="Z-Scanner — Web application security scanner powered by OWASP ZAP. Identify vulnerabilities with automated scanning." />
     <title>Z-Scanner — Web Application Security Scanner</title>
 
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" />
+
     <link rel="stylesheet" href="style.css" />
 </head>
 <body>
-    <div class="app">
-        <!-- Header -->
-        <header class="header" id="header">
-            <div class="header__brand">
-                <svg class="header__mark" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-                    <rect width="32" height="32" rx="4" fill="currentColor"/>
-                    <path d="M9 22L16 10L23 22H9Z" stroke="#fff" stroke-width="1.5" fill="none"/>
-                    <circle cx="16" cy="18" r="2" fill="#fff"/>
-                </svg>
-                <span class="header__name">Z-Scanner</span>
-            </div>
-            <nav class="header__meta">
-                <time class="header__clock" id="hudClock" aria-live="polite">--:--</time>
-            </nav>
-        </header>
+    <main class="page">
 
-        <!-- Main Content -->
-        <main class="main">
-            <!-- Scan Input -->
-            <section class="section section--input" id="scanInputCard">
-                <div class="hero">
-                    <h1 class="hero__title">Scan your web application<br/>for vulnerabilities</h1>
-                    <p class="hero__desc">Automated security assessment powered by OWASP ZAP. Enter a target URL to begin vulnerability analysis.</p>
-                </div>
+        <!-- Sidebar TOC -->
+        <aside class="toc" aria-label="Table of contents">
+            <p class="toc__brand">Z-Scanner</p>
+            <span class="toc__role">Security Scanner · OWASP ZAP</span>
+            <nav>
+                <ul class="toc__list">
+                    <li><a href="#scanInputCard" class="toc__link toc__link--active" data-target="scanInputCard"><span class="num">00</span><span>Scan</span></a></li>
+                    <li><a href="#progressCard" class="toc__link toc__link--disabled" data-target="progressCard"><span class="num">01</span><span>Progress</span></a></li>
+                    <li><a href="#resultsCard" class="toc__link toc__link--disabled" data-target="resultsCard"><span class="num">02</span><span>Results</span></a></li>
+                    <li><a href="#errorCard" class="toc__link toc__link--disabled" data-target="errorCard"><span class="num">03</span><span>Errors</span></a></li>
+                </ul>
+            </nav>
+            <div class="toc__meta">
+                <time class="toc__clock" id="hudClock" aria-live="polite">--:--</time>
+                <span>v1.0</span>
+                <span>set in Inter Tight</span>
+            </div>
+        </aside>
+
+        <!-- Content column -->
+        <article class="content">
+
+            <!-- 00 · Scan Input -->
+            <section class="section" id="scanInputCard">
+                <p class="section__num">00 · Scan</p>
+                <h1 class="section__head section__head--lede">Scan your web application for vulnerabilities.</h1>
+                <p class="hero__desc">Automated security assessment powered by OWASP ZAP. Enter a target URL to begin vulnerability analysis.</p>
 
                 <div class="search" id="scanForm">
                     <div class="search__field">
@@ -126,7 +135,7 @@
                                 <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                             </svg>
                         </div>
-                        <h3 class="feature__title">Active & Passive Analysis</h3>
+                        <h3 class="feature__title">Active &amp; Passive Analysis</h3>
                         <p class="feature__desc">Scan for OWASP Top 10 including XSS, SQL injection, broken auth, and misconfigurations.</p>
                     </div>
                     <div class="feature">
@@ -173,12 +182,11 @@
                 </div>
             </section>
 
-            <!-- Progress -->
-            <section class="section section--progress hidden" id="progressCard">
-                <div class="section__head">
-                    <h2 class="section__title">Scanning</h2>
-                    <p class="section__subtitle" id="scanTarget">Acquiring target…</p>
-                </div>
+            <!-- 01 · Progress -->
+            <section class="section hidden" id="progressCard">
+                <p class="section__num">01 · Progress</p>
+                <h2 class="section__head">Scanning.</h2>
+                <p class="section__subtitle" id="scanTarget">Acquiring target…</p>
 
                 <div class="progress-group">
                     <div class="progress-row">
@@ -215,12 +223,11 @@
                 </button>
             </section>
 
-            <!-- Results -->
-            <section class="section section--results hidden" id="resultsCard">
-                <div class="section__head">
-                    <h2 class="section__title">Results</h2>
-                    <p class="section__subtitle" id="resultsSummaryText">Vulnerability assessment finalized</p>
-                </div>
+            <!-- 02 · Results -->
+            <section class="section hidden" id="resultsCard">
+                <p class="section__num">02 · Results</p>
+                <h2 class="section__head">Results.</h2>
+                <p class="section__subtitle" id="resultsSummaryText">Vulnerability assessment finalized</p>
 
                 <!-- Summary Stats -->
                 <div class="stats" id="statsGrid">
@@ -263,12 +270,11 @@
                 </button>
             </section>
 
-            <!-- Error -->
-            <section class="section section--error hidden" id="errorCard">
-                <div class="section__head">
-                    <h2 class="section__title">Scan failed</h2>
-                    <p class="section__subtitle" id="errorDetail">Connection terminated unexpectedly</p>
-                </div>
+            <!-- 03 · Error -->
+            <section class="section hidden" id="errorCard">
+                <p class="section__num">03 · Error</p>
+                <h2 class="section__head">Scan failed.</h2>
+                <p class="section__subtitle" id="errorDetail">Connection terminated unexpectedly</p>
                 <button type="button" class="btn btn--outline" id="retryBtn">
                     <svg class="btn__icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M17.65 6.35A8 8 0 1 0 19 12"/>
@@ -277,7 +283,8 @@
                     Retry
                 </button>
             </section>
-        </main>
+
+        </article>
 
         <!-- Footer -->
         <footer class="footer">
@@ -290,7 +297,8 @@
                 </div>
             </div>
         </footer>
-    </div>
+
+    </main>
 
     <script src="app.js"></script>
 </body>

@@ -186,9 +186,9 @@ async def stop_scan(scan_id: str) -> dict[str, str]:
     if status.phase in (ScanPhase.COMPLETE, ScanPhase.ERROR, ScanPhase.STOPPED):
         raise HTTPException(status_code=400, detail="Scan is not running")
 
-    status.stop_requested = True
-    logger.info("Stop requested for scan %s", scan_id)
-    return {"scan_id": scan_id, "message": "Scan stop requested"}
+    await scanner.force_stop(status)
+    logger.info("Force stop executed for scan %s", scan_id)
+    return {"scan_id": scan_id, "message": "Scan stopped"}
 
 
 @app.get("/api/results/{scan_id}", response_model=ResultsResponse)

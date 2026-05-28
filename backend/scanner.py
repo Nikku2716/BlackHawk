@@ -88,7 +88,7 @@ class ScanStatus:
 class ZapScanner:
     """Drives ZAP spider + active scan and collects alerts."""
 
-    POLL_INTERVAL = 2  # seconds between status polls
+    POLL_INTERVAL = 1  # seconds between status polls
 
     def __init__(self, zap_base_url: str = "http://zap:8080"):
         self._zap = ZAPv2(
@@ -161,6 +161,22 @@ class ZapScanner:
             status.phase = ScanPhase.ERROR
             status.error = str(exc)
             status.finished_at = time.time()
+
+    async def force_stop(self, status: ScanStatus) -> None:
+        """Immediately stop any running ZAP scans and update status."""
+        status.stop_requested = True
+        try:
+            if status.zap_spider_id:
+                await asyncio.to_thread(self._zap.spider.stop, status.zap_spider_id)
+                logger.info("Spider force-stopped [%s]", status.scan_id)
+        except Exception as exc:
+            logger.warning("Error stopping spider: %s", exc)
+        try:
+            if status.zap_ascan_id:
+                await asyncio.to_thread(self._zap.ascan.stop, status.zap_ascan_id)
+                logger.info("Active scan force-stopped [%s]", status.scan_id)
+        except Exception as exc:
+            logger.warning("Error stopping active scan: %s", exc)
 
     # ------------------------------------------------------------------
     # Configuration helpers
