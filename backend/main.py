@@ -4,6 +4,8 @@ Z-Scanner API — FastAPI application serving the scanning endpoints and static 
 
 from __future__ import annotations
 
+import csv
+import io
 import logging
 import os
 import uuid
@@ -12,7 +14,7 @@ from typing import Any
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, HttpUrl
 
@@ -99,9 +101,12 @@ class AlertItem(BaseModel):
     solution: str
     reference: str
     cweid: str
+    cwe_link: str = ""
     wascid: str
     param: str
     evidence: str
+    owasp_code: str = ""
+    owasp_category: str = ""
 
 
 class ResultsResponse(BaseModel):
@@ -111,6 +116,17 @@ class ResultsResponse(BaseModel):
     total_alerts: int
     summary: dict[str, int]
     alerts: list[AlertItem]
+
+
+class HistoryEntry(BaseModel):
+    scan_id: str
+    target_url: str
+    scan_mode: str
+    phase: str
+    started_at: float
+    finished_at: float | None
+    alert_summary: dict[str, int]
+    total_alerts: int
 
 
 # ---------------------------------------------------------------------------
@@ -145,7 +161,7 @@ async def start_scan(
     for existing in scans.values():
         if (
             existing.target_url == target
-            and existing.phase not in (ScanPhase.COMPLETE, ScanPhase.ERROR)
+            and existing.phase not in (ScanPhase.COMPLETE, ScanPhase.ERROR, ScanPhase.STOPPED)
         ):
             raise HTTPException(
                 status_code=409,
@@ -211,6 +227,85 @@ async def get_results(scan_id: str) -> ResultsResponse:
         summary=summary,
         alerts=[AlertItem(**a) for a in status.alerts],
     )
+
+
+# ---------------------------------------------------------------------------
+# History endpoint
+# ---------------------------------------------------------------------------
+@app.get("/api/history", response_model=list[HistoryEntry])
+async def get_history() -> list[HistoryEntry]:
+    """Return all scans, newest first."""
+    entries: list[HistoryEntry] = []
+    for s in scans.values():
+        summary: dict[str, int] = {"High": 0, "Medium": 0, "Low": 0}
+        for alert in s.alerts:
+            risk = alert.get("risk", "")
+            if risk in summary:
+                summary[risk] += 1
+        entries.append(
+            HistoryEntry(
+                scan_id=s.scan_id,
+                target_url=s.target_url,
+                scan_mode=s.scan_mode,
+                phase=s.phase.value,
+                started_at=s.started_at,
+                finished_at=s.finished_at,
+                alert_summary=summary,
+                total_alerts=len(s.alerts),
+            )
+        )
+    # Newest first
+    entries.sort(key=lambda e: e.started_at, reverse=True)
+    return entries
+
+
+# ---------------------------------------------------------------------------
+# Export endpoint (JSON / CSV)
+# ---------------------------------------------------------------------------
+@app.get("/api/export/{scan_id}")
+async def export_scan(scan_id: str, format: str = "json"):
+    status = scans.get(scan_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    if format == "csv":
+        output = io.StringIO()
+        fieldnames = [
+            "id", "name", "risk", "confidence", "description", "url",
+            "solution", "reference", "cweid", "cwe_link", "wascid",
+            "param", "evidence", "owasp_code", "owasp_category",
+        ]
+        writer = csv.DictWriter(output, fieldnames=fieldnames, extrasaction="ignore")
+        writer.writeheader()
+        for alert in status.alerts:
+            writer.writerow(alert)
+        output.seek(0)
+        return StreamingResponse(
+            iter([output.getvalue()]),
+            media_type="text/csv",
+            headers={
+                "Content-Disposition": f'attachment; filename="zscan-{scan_id}.csv"'
+            },
+        )
+
+    # Default: JSON
+    summary: dict[str, int] = {"High": 0, "Medium": 0, "Low": 0}
+    for alert in status.alerts:
+        risk = alert.get("risk", "")
+        if risk in summary:
+            summary[risk] += 1
+
+    return {
+        "scan_id": status.scan_id,
+        "target_url": status.target_url,
+        "scan_mode": status.scan_mode,
+        "phase": status.phase.value,
+        "started_at": status.started_at,
+        "finished_at": status.finished_at,
+        "summary": summary,
+        "total_alerts": len(status.alerts),
+        "alerts": status.alerts,
+    }
 
 
 # ---------------------------------------------------------------------------

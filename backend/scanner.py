@@ -83,12 +83,15 @@ class ScanStatus:
     stop_requested: bool = False
     zap_spider_id: str | None = None
     zap_ascan_id: str | None = None
+    _last_progress_time: float = field(default_factory=time.time)
+    _last_progress_value: int = 0
 
 
 class ZapScanner:
     """Drives ZAP spider + active scan and collects alerts."""
 
     POLL_INTERVAL = 1  # seconds between status polls
+    STALL_TIMEOUT = 300  # 5 minutes — auto-stop if no progress
 
     def __init__(self, zap_base_url: str = "http://zap:8080"):
         self._zap = ZAPv2(
@@ -123,9 +126,10 @@ class ZapScanner:
             # Phase 1 — Spider
             await self._run_spider(status, mode_cfg)
             if status.stop_requested:
+                status.alerts = await self._get_alerts(status.target_url)
                 status.phase = ScanPhase.STOPPED
                 status.finished_at = time.time()
-                logger.info("Scan stopped by user [%s]", status.scan_id)
+                logger.info("Scan stopped by user — collected %d partial alerts [%s]", len(status.alerts), status.scan_id)
                 return
 
             # Phase 2 — Active Scan (skip for quick/stealth modes)
@@ -133,9 +137,10 @@ class ZapScanner:
                 await self._configure_active_scan(mode_cfg)
                 await self._run_active_scan(status)
                 if status.stop_requested:
+                    status.alerts = await self._get_alerts(status.target_url)
                     status.phase = ScanPhase.STOPPED
                     status.finished_at = time.time()
-                    logger.info("Scan stopped by user [%s]", status.scan_id)
+                    logger.info("Scan stopped by user — collected %d partial alerts [%s]", len(status.alerts), status.scan_id)
                     return
             else:
                 status.active_scan_progress = 100
@@ -163,7 +168,12 @@ class ZapScanner:
             status.finished_at = time.time()
 
     async def force_stop(self, status: ScanStatus) -> None:
-        """Immediately stop any running ZAP scans and update status."""
+        """Signal the running scan to stop and tell ZAP to abort.
+
+        Sets stop_requested so the poll loops exit on their next iteration.
+        The phase transition to STOPPED is handled by run_full_scan after
+        it collects partial alerts, ensuring consistent state.
+        """
         status.stop_requested = True
         try:
             if status.zap_spider_id:
@@ -177,6 +187,7 @@ class ZapScanner:
                 logger.info("Active scan force-stopped [%s]", status.scan_id)
         except Exception as exc:
             logger.warning("Error stopping active scan: %s", exc)
+        logger.info("Stop requested for scan [%s]", status.scan_id)
 
     # ------------------------------------------------------------------
     # Configuration helpers
@@ -264,16 +275,34 @@ class ZapScanner:
         status.zap_spider_id = str(zap_id)
         logger.info("Spider started with ZAP scan ID %s", status.zap_spider_id)
 
+        status._last_progress_time = time.time()
+        status._last_progress_value = 0
+
         while True:
             if status.stop_requested:
                 logger.info("Stop requested — aborting spider [%s]", status.scan_id)
-                await asyncio.to_thread(self._zap.spider.stop, status.zap_spider_id)
-                status.spider_progress = 0
+                try:
+                    await asyncio.to_thread(self._zap.spider.stop, status.zap_spider_id)
+                except Exception:
+                    pass
                 return
 
             progress = int(await asyncio.to_thread(self._zap.spider.status, status.zap_spider_id))
             status.spider_progress = progress
             logger.debug("Spider progress: %d%%", progress)
+
+            # Track stall: auto-stop if no progress for STALL_TIMEOUT
+            if progress != status._last_progress_value:
+                status._last_progress_value = progress
+                status._last_progress_time = time.time()
+            elif time.time() - status._last_progress_time > self.STALL_TIMEOUT:
+                logger.warning("Spider stalled for %ds — auto-stopping [%s]", self.STALL_TIMEOUT, status.scan_id)
+                try:
+                    await asyncio.to_thread(self._zap.spider.stop, status.zap_spider_id)
+                except Exception:
+                    pass
+                break
+
             if progress >= 100:
                 break
             await asyncio.sleep(self.POLL_INTERVAL)
@@ -297,22 +326,81 @@ class ZapScanner:
         status.zap_ascan_id = str(zap_id)
         logger.info("Active scan started with ZAP scan ID %s", status.zap_ascan_id)
 
+        status._last_progress_time = time.time()
+        status._last_progress_value = 0
+
         while True:
             if status.stop_requested:
                 logger.info("Stop requested — aborting active scan [%s]", status.scan_id)
-                await asyncio.to_thread(self._zap.ascan.stop, status.zap_ascan_id)
-                status.active_scan_progress = 0
+                try:
+                    await asyncio.to_thread(self._zap.ascan.stop, status.zap_ascan_id)
+                except Exception:
+                    pass
                 return
 
             progress = int(await asyncio.to_thread(self._zap.ascan.status, status.zap_ascan_id))
             status.active_scan_progress = progress
             logger.debug("Active scan progress: %d%%", progress)
+
+            # Track stall: auto-stop if no progress for STALL_TIMEOUT
+            if progress != status._last_progress_value:
+                status._last_progress_value = progress
+                status._last_progress_time = time.time()
+            elif time.time() - status._last_progress_time > self.STALL_TIMEOUT:
+                logger.warning("Active scan stalled for %ds — auto-stopping [%s]", self.STALL_TIMEOUT, status.scan_id)
+                try:
+                    await asyncio.to_thread(self._zap.ascan.stop, status.zap_ascan_id)
+                except Exception:
+                    pass
+                break
+
             if progress >= 100:
                 break
             await asyncio.sleep(self.POLL_INTERVAL)
 
         status.active_scan_progress = 100
         logger.info("Active scan completed for %s", status.target_url)
+
+    # CWE → OWASP Top 10 (2021) mapping for common vulnerability classes
+    _CWE_OWASP_MAP: dict[str, str] = {
+        # A01: Broken Access Control
+        "285": "A01", "639": "A01", "284": "A01", "352": "A01",
+        "22": "A01", "425": "A01", "538": "A01",
+        # A02: Cryptographic Failures
+        "327": "A02", "328": "A02", "310": "A02", "326": "A02",
+        "319": "A02", "311": "A02", "312": "A02", "315": "A02",
+        # A03: Injection
+        "79": "A03", "89": "A03", "77": "A03", "78": "A03",
+        "90": "A03", "91": "A03", "564": "A03", "917": "A03",
+        # A04: Insecure Design
+        "209": "A04", "256": "A04", "501": "A04",
+        # A05: Security Misconfiguration
+        "16": "A05", "2": "A05", "215": "A05", "548": "A05",
+        "611": "A05",
+        # A06: Vulnerable and Outdated Components
+        "1104": "A06",
+        # A07: Identification and Authentication Failures
+        "287": "A07", "384": "A07", "613": "A07", "620": "A07",
+        # A08: Software and Data Integrity Failures
+        "345": "A08", "353": "A08", "829": "A08", "502": "A08",
+        # A09: Security Logging and Monitoring Failures
+        "778": "A09", "223": "A09",
+        # A10: Server-Side Request Forgery
+        "918": "A10",
+    }
+
+    _OWASP_NAMES: dict[str, str] = {
+        "A01": "Broken Access Control",
+        "A02": "Cryptographic Failures",
+        "A03": "Injection",
+        "A04": "Insecure Design",
+        "A05": "Security Misconfiguration",
+        "A06": "Vulnerable & Outdated Components",
+        "A07": "Auth Failures",
+        "A08": "Integrity Failures",
+        "A09": "Logging & Monitoring Failures",
+        "A10": "SSRF",
+    }
 
     async def _get_alerts(self, target_url: str) -> list[dict[str, Any]]:
         """Retrieve and filter alerts for High / Medium / Low risk levels."""
@@ -328,6 +416,11 @@ class ZapScanner:
             if risk not in keep_risks:
                 continue
 
+            cweid = str(alert.get("cweid", ""))
+            owasp_code = self._CWE_OWASP_MAP.get(cweid, "")
+            owasp_category = self._OWASP_NAMES.get(owasp_code, "") if owasp_code else ""
+            cwe_link = f"https://cwe.mitre.org/data/definitions/{cweid}.html" if cweid and cweid != "-1" else ""
+
             filtered.append(
                 {
                     "id": alert.get("id", ""),
@@ -338,10 +431,13 @@ class ZapScanner:
                     "url": alert.get("url", ""),
                     "solution": alert.get("solution", ""),
                     "reference": alert.get("reference", ""),
-                    "cweid": alert.get("cweid", ""),
+                    "cweid": cweid,
+                    "cwe_link": cwe_link,
                     "wascid": alert.get("wascid", ""),
                     "param": alert.get("param", ""),
                     "evidence": alert.get("evidence", ""),
+                    "owasp_code": owasp_code,
+                    "owasp_category": owasp_category,
                 }
             )
 

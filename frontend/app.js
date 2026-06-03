@@ -13,6 +13,7 @@
         scanInputCard:   $("#scanInputCard"),
         progressCard:    $("#progressCard"),
         resultsCard:     $("#resultsCard"),
+        historyCard:     $("#historyCard"),
         errorCard:       $("#errorCard"),
 
         scanTarget:      $("#scanTarget"),
@@ -21,6 +22,7 @@
         activeBar:       $("#activeBar"),
         activePercent:   $("#activePercent"),
         scanPhaseLabel:  $("#scanPhaseLabel"),
+        elapsedTimer:    $("#elapsedTimer"),
 
         statsGrid:       $("#statsGrid"),
         statHigh:        $("#statHigh"),
@@ -31,13 +33,28 @@
         filterTabs:      $("#filterTabs"),
         alertsList:      $("#alertsList"),
 
+        // Severity chart
+        chartHigh:       $("#chartHigh"),
+        chartMed:        $("#chartMed"),
+        chartLow:        $("#chartLow"),
+        chartHighCount:  $("#chartHighCount"),
+        chartMedCount:   $("#chartMedCount"),
+        chartLowCount:   $("#chartLowCount"),
+
         newScanBtn:      $("#newScanBtn"),
         retryBtn:        $("#retryBtn"),
         stopBtn:         $("#stopBtn"),
         errorDetail:     $("#errorDetail"),
         hudClock:        $("#hudClock"),
         scanModes:       $("#scanModes"),
-        tocList:         $(".toc__list"),
+        navList:         $(".nav-list"),
+
+        // Export
+        exportJsonBtn:   $("#exportJsonBtn"),
+        exportCsvBtn:    $("#exportCsvBtn"),
+
+        // History
+        historyList:     $("#historyList"),
     };
 
     let currentScanId = null;
@@ -45,23 +62,28 @@
     let allAlerts = [];
     let selectedScanMode = "fast";
     let stoppingInProgress = false;
+    let scanStartTime = null;
+    let elapsedInterval = null;
 
-    // Track which sections are "available" (have been visited/have data)
+    // Track which sections are "available"
     const sectionAvailability = {
         scanInputCard: true,
         progressCard: false,
         resultsCard: false,
+        historyCard: true,
         errorCard: false,
     };
 
     const API_BASE = window.location.origin;
-    const POLL_INTERVAL_MS = 1500;
+    const POLL_INTERVAL_MS = 1200;
+    const POLL_INTERVAL_FAST_MS = 500;
 
     // Map section IDs to their cards
     const sectionCards = {
         scanInputCard: dom.scanInputCard,
         progressCard:  dom.progressCard,
         resultsCard:   dom.resultsCard,
+        historyCard:   dom.historyCard,
         errorCard:     dom.errorCard,
     };
 
@@ -75,62 +97,86 @@
     setInterval(updateClock, 1000);
 
     // ------------------------------------------------------------------
-    // TOC navigation
+    // Elapsed timer
     // ------------------------------------------------------------------
-    function setTocActive(sectionId) {
-        $$(".toc__link").forEach((link) => {
-            link.classList.remove("toc__link--active");
-        });
-        const activeLink = $(`.toc__link[data-target="${sectionId}"]`);
-        if (activeLink) {
-            activeLink.classList.add("toc__link--active");
+    function startElapsedTimer() {
+        scanStartTime = Date.now();
+        updateElapsed();
+        if (elapsedInterval) clearInterval(elapsedInterval);
+        elapsedInterval = setInterval(updateElapsed, 1000);
+    }
+
+    function stopElapsedTimer() {
+        if (elapsedInterval) {
+            clearInterval(elapsedInterval);
+            elapsedInterval = null;
         }
     }
 
-    function enableTocLink(sectionId) {
-        const link = $(`.toc__link[data-target="${sectionId}"]`);
+    function updateElapsed() {
+        if (!scanStartTime) return;
+        const elapsed = Math.floor((Date.now() - scanStartTime) / 1000);
+        const mins = Math.floor(elapsed / 60);
+        const secs = String(elapsed % 60).padStart(2, "0");
+        dom.elapsedTimer.textContent = `Elapsed: ${mins}:${secs}`;
+    }
+
+    // ------------------------------------------------------------------
+    // TOC navigation
+    // ------------------------------------------------------------------
+    function setNavActive(sectionId) {
+        $$(".nav-link").forEach((link) => {
+            link.classList.remove("nav-link--active");
+        });
+        const activeLink = $(`.nav-link[data-target="${sectionId}"]`);
+        if (activeLink) {
+            activeLink.classList.add("nav-link--active");
+        }
+    }
+
+    function enableNavLink(sectionId) {
+        const link = $(`.nav-link[data-target="${sectionId}"]`);
         if (link) {
-            link.classList.remove("toc__link--disabled");
+            link.classList.remove("nav-link--disabled");
             sectionAvailability[sectionId] = true;
         }
     }
 
-    function disableTocLink(sectionId) {
-        const link = $(`.toc__link[data-target="${sectionId}"]`);
+    function disableNavLink(sectionId) {
+        const link = $(`.nav-link[data-target="${sectionId}"]`);
         if (link) {
-            link.classList.add("toc__link--disabled");
+            link.classList.add("nav-link--disabled");
             sectionAvailability[sectionId] = false;
         }
     }
 
-    function resetTocLinks() {
-        // Enable only Scan, disable the rest
-        enableTocLink("scanInputCard");
-        disableTocLink("progressCard");
-        disableTocLink("resultsCard");
-        disableTocLink("errorCard");
+    function resetNavLinks() {
+        enableNavLink("scanInputCard");
+        enableNavLink("historyCard");
+        disableNavLink("progressCard");
+        disableNavLink("resultsCard");
+        disableNavLink("errorCard");
     }
 
-    function handleTocClick(e) {
-        const link = e.target.closest(".toc__link");
+    function handleNavClick(e) {
+        const link = e.target.closest(".nav-link");
         if (!link) return;
         e.preventDefault();
-
-        if (link.classList.contains("toc__link--disabled")) return;
+        if (link.classList.contains("nav-link--disabled")) return;
 
         const targetId = link.dataset.target;
         const card = sectionCards[targetId];
         if (!card) return;
 
         showCard(card);
-        setTocActive(targetId);
+        setNavActive(targetId);
     }
 
     // ------------------------------------------------------------------
     // Card visibility
     // ------------------------------------------------------------------
     function showCard(cardEl) {
-        [dom.scanInputCard, dom.progressCard, dom.resultsCard, dom.errorCard]
+        [dom.scanInputCard, dom.progressCard, dom.resultsCard, dom.historyCard, dom.errorCard]
             .forEach((c) => c.classList.add("hidden"));
         cardEl.classList.remove("hidden");
         cardEl.style.animation = "none";
@@ -143,10 +189,10 @@
             dom.stopBtn.classList.add("hidden");
         }
 
-        // Update TOC active state to match the shown card
+        // Update nav active state to match the shown card
         for (const [id, el] of Object.entries(sectionCards)) {
             if (el === cardEl) {
-                setTocActive(id);
+                setNavActive(id);
                 break;
             }
         }
@@ -173,13 +219,17 @@
         dom.scanPhaseLabel.querySelector("span:last-child").textContent = text;
 
         if (phase === "complete") {
-            dot.style.background = "var(--success)";
+            dot.style.background = "var(--color-success)";
+            dot.style.animation = "none";
         } else if (phase === "error") {
-            dot.style.background = "var(--risk-high)";
+            dot.style.background = "var(--color-risk-high)";
+            dot.style.animation = "none";
         } else if (phase === "stopped") {
-            dot.style.background = "var(--risk-med)";
+            dot.style.background = "var(--color-risk-med)";
+            dot.style.animation = "none";
         } else {
-            dot.style.background = "var(--accent)";
+            dot.style.background = "var(--color-accent)";
+            dot.style.animation = "";
         }
     }
 
@@ -244,12 +294,17 @@
             setPhaseLabel("idle");
             dom.scanTarget.textContent = url;
 
-            // Enable Progress in TOC, disable Results/Errors
-            enableTocLink("progressCard");
-            disableTocLink("resultsCard");
-            disableTocLink("errorCard");
+            // Reset stop button
+            dom.stopBtn.disabled = false;
+            dom.stopBtn.innerHTML = `<svg class="btn__icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="10" rx="2"/></svg> Stop Scan`;
+
+            // Enable Progress in nav, disable Results/Errors
+            enableNavLink("progressCard");
+            disableNavLink("resultsCard");
+            disableNavLink("errorCard");
 
             showCard(dom.progressCard);
+            startElapsedTimer();
             beginPolling();
         } catch (err) {
             dom.errorMsg.textContent = err.message;
@@ -261,6 +316,11 @@
     function beginPolling() {
         if (pollTimer) clearInterval(pollTimer);
         pollTimer = setInterval(pollStatus, POLL_INTERVAL_MS);
+    }
+
+    function beginFastPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(pollStatus, POLL_INTERVAL_FAST_MS);
     }
 
     async function pollStatus() {
@@ -276,10 +336,12 @@
             if (status.phase === "complete") {
                 clearInterval(pollTimer);
                 pollTimer = null;
+                stopElapsedTimer();
                 await showResults();
             } else if (status.phase === "stopped") {
                 clearInterval(pollTimer);
                 pollTimer = null;
+                stopElapsedTimer();
                 dom.stopBtn.classList.add("hidden");
                 stoppingInProgress = false;
                 setPhaseLabel("stopped");
@@ -287,6 +349,7 @@
             } else if (status.phase === "error") {
                 clearInterval(pollTimer);
                 pollTimer = null;
+                stopElapsedTimer();
                 showError(status.error || "An unknown error occurred during the scan.");
             }
         } catch (err) {
@@ -305,24 +368,55 @@
             dom.resultsSummary.textContent =
                 `${data.total_alerts} vulnerabilities detected in ${data.target_url}`;
 
+            // Update severity chart
+            updateSeverityChart(data.summary);
+
             allAlerts = data.alerts || [];
             renderAlerts(allAlerts);
             resetFilterTabs();
 
-            // Enable Results in TOC
-            enableTocLink("resultsCard");
+            // Enable Results in nav
+            enableNavLink("resultsCard");
 
             showCard(dom.resultsCard);
+
+            // Refresh history
+            loadHistory();
         } catch (err) {
             showError(err.message);
         }
     }
 
+    function updateSeverityChart(summary) {
+        const high = summary.High || 0;
+        const med = summary.Medium || 0;
+        const low = summary.Low || 0;
+        const total = high + med + low;
+
+        dom.chartHighCount.textContent = high;
+        dom.chartMedCount.textContent = med;
+        dom.chartLowCount.textContent = low;
+
+        if (total === 0) {
+            dom.chartHigh.style.flex = "0";
+            dom.chartMed.style.flex = "0";
+            dom.chartLow.style.flex = "0";
+            return;
+        }
+
+        // Use setTimeout to trigger CSS transition
+        requestAnimationFrame(() => {
+            dom.chartHigh.style.flex = String(high || 0.001);
+            dom.chartMed.style.flex = String(med || 0.001);
+            dom.chartLow.style.flex = String(low || 0.001);
+        });
+    }
+
     function showError(message) {
         dom.errorDetail.textContent = message;
 
-        // Enable Errors in TOC
-        enableTocLink("errorCard");
+        // Enable Errors in nav
+        enableNavLink("errorCard");
 
         showCard(dom.errorCard);
     }
@@ -334,25 +428,25 @@
         dom.targetUrl.value = "";
         dom.errorMsg.textContent = "";
         selectedScanMode = "fast";
-        $$(".scan-mode").forEach((m) => m.classList.remove("scan-mode--selected"));
-        $(".scan-mode[data-mode='fast']").classList.add("scan-mode--selected");
+        $$(".mode-card").forEach((m) => m.classList.remove("mode-card--active"));
+        $(".mode-card[data-mode='fast']").classList.add("mode-card--active");
 
-        // Reset TOC — only Scan is available
-        resetTocLinks();
+        // Reset nav — Scan and History available
+        resetNavLinks();
 
         showCard(dom.scanInputCard);
         dom.targetUrl.focus();
     }
 
     function handleModeSelect(e) {
-        const modeCard = e.target.closest(".scan-mode");
+        const modeCard = e.target.closest(".mode-card");
         if (!modeCard) return;
         const mode = modeCard.dataset.mode;
         if (!mode) return;
 
         selectedScanMode = mode;
-        $$(".scan-mode").forEach((m) => m.classList.remove("scan-mode--selected"));
-        modeCard.classList.add("scan-mode--selected");
+        $$(".mode-card").forEach((m) => m.classList.remove("mode-card--active"));
+        modeCard.classList.add("mode-card--active");
     }
 
     function animateCounter(el, target) {
@@ -385,29 +479,31 @@
                 <div class="alert-item__header" role="button" tabindex="0" aria-expanded="false">
                     <span class="alert-item__badge alert-item__badge--${a.risk}">${a.risk}</span>
                     <span class="alert-item__name">${escapeHtml(a.name)}</span>
+                    ${a.owasp_code ? `<span class="alert-item__owasp">${escapeHtml(a.owasp_code)}</span>` : ""}
                     <svg class="alert-item__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="alert-item__body">
-                    ${detailBlock("URL",          a.url,         true)}
-                    ${detailBlock("Description",  a.description, false)}
-                    ${detailBlock("Solution",     a.solution,    false)}
-                    ${detailBlock("Confidence",   a.confidence,  false)}
-                    ${detailBlock("Parameter",    a.param,       false)}
-                    ${detailBlock("Evidence",     a.evidence,    false)}
-                    ${detailBlock("CWE ID",       a.cweid,       false)}
-                    ${detailBlock("Reference",    a.reference,   false)}
+                    ${detailBlock("URL",          a.url,         "url")}
+                    ${detailBlock("Description",  a.description, "")}
+                    ${detailBlock("Solution",     a.solution,    "")}
+                    ${a.owasp_category ? detailBlock("OWASP Top 10", `${a.owasp_code}: ${a.owasp_category}`, "") : ""}
+                    ${a.cwe_link ? detailBlock("CWE ID", `<a href="${escapeHtml(a.cwe_link)}" target="_blank" rel="noopener noreferrer">CWE-${escapeHtml(a.cweid)}</a>`, "link") : detailBlock("CWE ID", a.cweid, "")}
+                    ${detailBlock("Confidence",   a.confidence,  "")}
+                    ${detailBlock("Parameter",    a.param,       "")}
+                    ${detailBlock("Evidence",     a.evidence,    "")}
+                    ${detailBlock("Reference",    a.reference,   "")}
                 </div>
             </div>
         `).join("");
     }
 
-    function detailBlock(label, value, isUrl) {
+    function detailBlock(label, value, type) {
         if (!value) return "";
-        const cls = isUrl ? " alert-detail__value--url" : "";
+        const cls = type === "url" ? " alert-detail__value--url" : type === "link" ? " alert-detail__value--link" : "";
         return `
             <div class="alert-detail">
                 <div class="alert-detail__label">${label}</div>
-                <div class="alert-detail__value${cls}">${escapeHtml(value)}</div>
+                <div class="alert-detail__value${cls}">${type === "link" ? value : escapeHtml(value)}</div>
             </div>`;
     }
 
@@ -418,15 +514,15 @@
     }
 
     function resetFilterTabs() {
-        $$(".filter").forEach((t) => t.classList.remove("active"));
-        $(".filter[data-filter='all']").classList.add("active");
+        $$(".filter-btn").forEach((t) => t.classList.remove("active"));
+        $(".filter-btn[data-filter='all']").classList.add("active");
     }
 
     function handleFilter(e) {
-        const tab = e.target.closest(".filter");
+        const tab = e.target.closest(".filter-btn");
         if (!tab) return;
 
-        $$(".filter").forEach((t) => t.classList.remove("active"));
+        $$(".filter-btn").forEach((t) => t.classList.remove("active"));
         tab.classList.add("active");
 
         const filter = tab.dataset.filter;
@@ -445,6 +541,75 @@
     }
 
     // ------------------------------------------------------------------
+    // History
+    // ------------------------------------------------------------------
+    async function loadHistory() {
+        try {
+            const history = await apiGet("/api/history");
+            renderHistory(history);
+        } catch (err) {
+            console.error("Failed to load history:", err);
+        }
+    }
+
+    function renderHistory(entries) {
+        if (!entries || entries.length === 0) {
+            dom.historyList.innerHTML = `
+                <div class="history-empty">
+                    <p>No scans yet. Start a scan to see history here.</p>
+                </div>`;
+            return;
+        }
+
+        dom.historyList.innerHTML = entries.map((entry) => {
+            const statusClass = entry.phase === "complete" ? "complete" :
+                                entry.phase === "stopped" ? "stopped" :
+                                entry.phase === "error" ? "error" : "running";
+            const date = new Date(entry.started_at * 1000);
+            const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+            const dateStr = date.toLocaleDateString([], { month: "short", day: "numeric" });
+
+            return `
+                <div class="history-item" data-scan-id="${entry.scan_id}">
+                    <span class="history-item__status history-item__status--${statusClass}"></span>
+                    <div class="history-item__info">
+                        <div class="history-item__url">${escapeHtml(entry.target_url)}</div>
+                        <div class="history-item__meta">
+                            <span>${entry.scan_mode}</span>
+                            <span>${dateStr} ${timeStr}</span>
+                            <span>${entry.phase}</span>
+                        </div>
+                    </div>
+                    <div class="history-item__badges">
+                        ${entry.alert_summary.High ? `<span class="history-badge history-badge--high">${entry.alert_summary.High}H</span>` : ""}
+                        ${entry.alert_summary.Medium ? `<span class="history-badge history-badge--med">${entry.alert_summary.Medium}M</span>` : ""}
+                        ${entry.alert_summary.Low ? `<span class="history-badge history-badge--low">${entry.alert_summary.Low}L</span>` : ""}
+                    </div>
+                </div>`;
+        }).join("");
+    }
+
+    function handleHistoryClick(e) {
+        const item = e.target.closest(".history-item");
+        if (!item) return;
+        const scanId = item.dataset.scanId;
+        if (!scanId) return;
+
+        // Load results for this scan
+        currentScanId = scanId;
+        showResults();
+    }
+
+    // ------------------------------------------------------------------
+    // Export
+    // ------------------------------------------------------------------
+    function exportResults(format) {
+        if (!currentScanId) return;
+        const url = `${API_BASE}/api/export/${currentScanId}?format=${format}`;
+        window.open(url, "_blank");
+    }
+
+    // ------------------------------------------------------------------
     // Event bindings
     // ------------------------------------------------------------------
     dom.scanBtn.addEventListener("click", startScan);
@@ -457,16 +622,16 @@
         if (!currentScanId || stoppingInProgress) return;
         stoppingInProgress = true;
         dom.stopBtn.disabled = true;
-        dom.stopBtn.textContent = "Stopping…";
+        dom.stopBtn.innerHTML = `<svg class="btn__icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="10" rx="2"/></svg> Stopping…`;
         try {
             await apiPost(`/api/stop/${currentScanId}`, {});
-            // Immediately poll once to get the stopped state faster
-            setTimeout(pollStatus, 300);
+            // Poll more aggressively to detect the stopped state faster
+            beginFastPolling();
         } catch (err) {
             console.error("Stop error:", err);
             stoppingInProgress = false;
             dom.stopBtn.disabled = false;
-            dom.stopBtn.textContent = "Stop scan";
+            dom.stopBtn.innerHTML = `<svg class="btn__icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="5" width="10" height="10" rx="2"/></svg> Stop Scan`;
         }
     });
 
@@ -488,8 +653,18 @@
 
     dom.scanModes.addEventListener("click", handleModeSelect);
 
-    // TOC navigation click handler
-    dom.tocList.addEventListener("click", handleTocClick);
+    // Nav navigation click handler
+    dom.navList.addEventListener("click", handleNavClick);
+
+    // Export buttons
+    dom.exportJsonBtn.addEventListener("click", () => exportResults("json"));
+    dom.exportCsvBtn.addEventListener("click", () => exportResults("csv"));
+
+    // History click handler
+    dom.historyList.addEventListener("click", handleHistoryClick);
+
+    // Load history on start
+    loadHistory();
 
     dom.targetUrl.focus();
 })();
