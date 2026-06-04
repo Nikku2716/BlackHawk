@@ -277,7 +277,7 @@
             return;
         }
         if (!isValidUrl(url)) {
-            dom.errorMsg.textContent = "Invalid URL — include http:// or https://";
+            dom.errorMsg.textContent = "Invalid URL — use http:// or https:// (e.g. http://192.168.1.10:8080)";
             dom.targetUrl.focus();
             return;
         }
@@ -474,16 +474,41 @@
             return;
         }
 
-        dom.alertsList.innerHTML = alerts.map((a, i) => `
+        dom.alertsList.innerHTML = alerts.map((a, i) => {
+            const urls = a.affected_urls || (a.url ? [a.url] : []);
+            const urlCount = urls.length;
+            let urlBlock = "";
+
+            if (urlCount === 0) {
+                urlBlock = "";
+            } else if (urlCount === 1) {
+                urlBlock = detailBlock("URL", urls[0], "url");
+            } else {
+                const urlList = urls.map(u => `<div class="affected-url">${escapeHtml(u)}</div>`).join("");
+                urlBlock = `
+                    <div class="alert-detail">
+                        <div class="alert-detail__label">Affected URLs <span class="affected-url-count">${urlCount}</span></div>
+                        <div class="alert-detail__value alert-detail__value--url-list">
+                            <div class="affected-urls-preview">${escapeHtml(urls[0])}</div>
+                            <details class="affected-urls-details">
+                                <summary class="affected-urls-toggle">Show all ${urlCount} URLs</summary>
+                                <div class="affected-urls-list">${urlList}</div>
+                            </details>
+                        </div>
+                    </div>`;
+            }
+
+            return `
             <div class="alert-item" data-index="${i}">
                 <div class="alert-item__header" role="button" tabindex="0" aria-expanded="false">
                     <span class="alert-item__badge alert-item__badge--${a.risk}">${a.risk}</span>
                     <span class="alert-item__name">${escapeHtml(a.name)}</span>
+                    ${urlCount > 1 ? `<span class="alert-item__url-count">${urlCount} URLs</span>` : ""}
                     ${a.owasp_code ? `<span class="alert-item__owasp">${escapeHtml(a.owasp_code)}</span>` : ""}
                     <svg class="alert-item__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
                 </div>
                 <div class="alert-item__body">
-                    ${detailBlock("URL",          a.url,         "url")}
+                    ${urlBlock}
                     ${detailBlock("Description",  a.description, "")}
                     ${detailBlock("Solution",     a.solution,    "")}
                     ${a.owasp_category ? detailBlock("OWASP Top 10", `${a.owasp_code}: ${a.owasp_category}`, "") : ""}
@@ -493,8 +518,8 @@
                     ${detailBlock("Evidence",     a.evidence,    "")}
                     ${detailBlock("Reference",    a.reference,   "")}
                 </div>
-            </div>
-        `).join("");
+            </div>`;
+        }).join("");
     }
 
     function detailBlock(label, value, type) {

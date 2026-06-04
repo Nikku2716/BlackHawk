@@ -11,6 +11,10 @@ services:
       -config api.addrs.addr.regex=true
     ports:
       - "8080:8080"
+    # Allow ZAP to reach services running on the host machine.
+    # To scan a local app on port 3000, use: http://host.docker.internal:3000
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - zscanner-net
     healthcheck:
@@ -32,6 +36,8 @@ services:
     depends_on:
       zap:
         condition: service_healthy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       - ./frontend:/app/frontend:ro
     networks:
@@ -40,3 +46,4 @@ services:
 networks:
   zscanner-net:
     driver: bridge
+
