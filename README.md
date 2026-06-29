@@ -1,7 +1,7 @@
 <div align="center">
   <br/>
   <img src="https://img.shields.io/badge/status-active-success?style=flat-square" alt="Status"/>
-  <img src="https://img.shields.io/github/license/Nikku2716/Z-Scanner?style=flat-square" alt="License"/>
+  <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="License"/>
   <img src="https://img.shields.io/badge/rust-1.87-orange?style=flat-square" alt="Rust"/>
   <br/><br/>
 </div>
@@ -217,4 +217,4 @@ Edit `get_scan_mode_config()` in `backend/src/models.rs` to tune spider depth, r
 
 ## License
 
-[MIT](LICENSE)
+[GNU GPLv3](LICENSE)

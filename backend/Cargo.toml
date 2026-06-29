@@ -2,7 +2,7 @@
 name = "blackhawk-api"
 version = "1.0.0"
 edition = "2021"
-description = "BlackHawk — Web Application Vulnerability Scanner backend powered by OWASP ZAP"
+description = "BlackHawk — Web App Vuln Scanner backend powered by OWASP ZAP"
 
 [[bin]]
 name = "blackhawk-api"
