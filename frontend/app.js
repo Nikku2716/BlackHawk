@@ -243,7 +243,7 @@
                     obs.unobserve(entry.target);
                 }
             });
-        }, { threshold: 0.15 });
+        }, { threshold: 0.05 });
 
         els.forEach((el) => obs.observe(el));
     }
