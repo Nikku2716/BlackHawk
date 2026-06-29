@@ -318,6 +318,46 @@
     gap: var(--spacing-30);
   }
 
+  /* ─── Page Footer (standalone) ───────────────── */
+
+  .page-footer {
+    width: 100%;
+    border-top: 1px solid var(--color-mist);
+    background: var(--surface-canvas);
+  }
+
+  .page-footer__inner {
+    max-width: var(--page-max-width);
+    margin: 0 auto;
+    padding: var(--spacing-25) var(--spacing-60);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--spacing-30);
+  }
+
+  .page-footer__text {
+    font-family: var(--font-twk-lausanne);
+    font-size: 13px;
+    color: var(--color-sage);
+    font-weight: 350;
+  }
+
+  .page-footer__opensource {
+    font-family: var(--font-twk-lausanne);
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--color-voltage);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    transition: color 0.25s ease;
+    cursor: default;
+  }
+
+  .page-footer__opensource:hover {
+    color: var(--color-obsidian-ink);
+  }
+
   .section-block:last-of-type {
     padding-bottom: var(--spacing-140);
   }
@@ -569,6 +609,7 @@
 
   .hero-right {
     padding-top: var(--spacing-45);
+    min-width: 0;
   }
 
   .scan-input-section {
@@ -590,6 +631,7 @@
     overflow: hidden;
     border: 1.5px solid var(--color-mist);
     transition: border-color 0.3s ease, box-shadow 0.35s ease;
+    min-width: 0;
   }
 
   .scan-input__field:hover {
@@ -1886,6 +1928,20 @@
       display: none;
     }
 
+    .scan-input__field .btn--primary {
+      padding: var(--spacing-18) var(--spacing-20);
+      font-size: 13px;
+    }
+
+    .scan-input__field .btn__arrow {
+      display: none;
+    }
+
+    .scan-input__url {
+      font-size: 14px;
+      padding: var(--spacing-15) var(--spacing-18);
+    }
+
     .wordmark__text {
       font-size: 15px;
     }
@@ -1997,6 +2053,15 @@
 
     .page-capabilities__footer {
       background: #0e110f;
+    }
+
+    .page-footer {
+      background: var(--surface-canvas);
+      border-top-color: var(--color-mist);
+    }
+
+    .page-footer__opensource:hover {
+      color: var(--color-obsidian-ink);
     }
 
     .feature-item:hover {
