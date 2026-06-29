@@ -1,9 +1,7 @@
-version: "3.9"
-
 services:
   zap:
     image: docker.io/zaproxy/zap-stable
-    container_name: zscanner-zap
+    container_name: blackhawk-zap
     command: >
       zap.sh -daemon -host 0.0.0.0 -port 8080
       -config api.disablekey=true
@@ -11,12 +9,10 @@ services:
       -config api.addrs.addr.regex=true
     ports:
       - "8080:8080"
-    # Allow ZAP to reach services running on the host machine.
-    # To scan a local app on port 3000, use: http://host.docker.internal:3000
     extra_hosts:
       - "host.docker.internal:host-gateway"
     networks:
-      - zscanner-net
+      - blackhawk-net
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/JSON/core/view/version/"]
       interval: 10s
@@ -28,11 +24,26 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-    container_name: zscanner-api
+    container_name: blackhawk-api
     ports:
       - "8000:8000"
     environment:
       - ZAP_API_URL=http://zap:8080
+      - ZSCANNER_ENABLE_ACTIVE_SCAN=false
+      - ZSCANNER_MAX_CONCURRENT_SCANS=1
+      - ZSCANNER_ALERT_THRESHOLD=MEDIUM
+      - ZSCANNER_MIN_CONFIDENCE=2
+      - ZSCANNER_EXCLUDED_ALERTS=
+      - ZSCANNER_ALERT_FETCH_COUNT=5000
+      - ZSCANNER_API_KEY=
+      - ZSCANNER_WEBHOOK_URL=
+      - ZSCANNER_DB_PATH=/app/data/scans.db
+      - ZSCANNER_SPIDER_THREADS_QUICK=2
+      - ZSCANNER_SPIDER_THREADS_FAST=4
+      - ZSCANNER_SPIDER_THREADS_DEEP=6
+      - ZSCANNER_SPIDER_DELAY_QUICK=300
+      - ZSCANNER_SPIDER_DELAY_FAST=200
+      - ZSCANNER_SPIDER_DELAY_DEEP=100
     depends_on:
       zap:
         condition: service_healthy
@@ -40,10 +51,19 @@ services:
       - "host.docker.internal:host-gateway"
     volumes:
       - ./frontend:/app/frontend:ro
+      - scan-data:/app/data
     networks:
-      - zscanner-net
+      - blackhawk-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+volumes:
+  scan-data:
 
 networks:
-  zscanner-net:
+  blackhawk-net:
     driver: bridge
-

@@ -6,9 +6,9 @@
   <br/><br/>
 </div>
 
- # Z-Scanner
+ # BlackHawk
 
-**Z-Scanner** is a web application security scanner powered by [OWASP ZAP](https://www.zaproxy.org/). It provides a clean, real-time dashboard to spider websites, run active vulnerability scans, and inspect findings -- all from your browser.
+**BlackHawk** is a web application vulnerability scanner powered by [OWASP ZAP](https://www.zaproxy.org/). It provides a clean, real-time dashboard to spider websites, run active vulnerability scans, and inspect findings -- all from your browser.
 
 Built with a **Rust/Actix-web** backend and a vanilla **HTML/CSS/JS** frontend, orchestrated via Docker Compose.
 
@@ -16,7 +16,7 @@ Built with a **Rust/Actix-web** backend and a vanilla **HTML/CSS/JS** frontend, 
 
 ## Features
 
-- **4 Scan Modes** -- Quick, Fast, Deep, Stealth (each with different depth/CPU profiles)
+- **4 Scan Modes** -- Quick, Fast, Deep, Stealth (safe defaults with capped depth/load)
 - **Real-Time Progress** -- Live spider + active scan percentage updates
 - **Risk-Based Filtering** -- Filter alerts by High / Medium / Low severity
 - **Stop & Retry** -- Cancel running scans, start new ones instantly
@@ -41,12 +41,14 @@ Built with a **Rust/Actix-web** backend and a vanilla **HTML/CSS/JS** frontend, 
 
 ### Scan Modes
 
-| Mode    | Spider Threads | Max Children | Active Scan | Strength | Threshold | Description |
-|---------|---------------|-------------|-------------|----------|-----------|-------------|
-| Quick   | 1             | 5           | No          | —        | —         | Surface-level -- headers, cookies, basic misconfig |
-| Fast    | 3             | 10          | Yes         | LOW      | MEDIUM    | Standard scan with limited attack depth |
-| Deep    | 5             | Unlimited   | Yes         | HIGH     | LOW       | Comprehensive full-depth vulnerability scan |
-| Stealth | 1             | 10          | No          | —        | —         | Passive only -- zero noise on target |
+| Mode    | Spider Threads | Max Children | Active Scan | Request Delay | Time Cap | Description |
+|---------|---------------|-------------|-------------|---------------|----------|-------------|
+| Stealth | 0             | 0           | No          | —             | 2 min    | Passive only -- opens the target once and avoids crawling/probing |
+| Quick   | 1             | 5           | No          | 750 ms        | 3 min    | Surface-level crawl with low request volume |
+| Fast    | 1             | 10          | Opt-in      | 500 ms        | 7 min    | Shallow crawl; active checks only when explicitly enabled |
+| Deep    | 2             | 50          | Opt-in      | 500 ms        | 15 min   | Broader capped crawl; active checks only when explicitly enabled |
+
+Active scanning is disabled by default to prevent accidental load or destructive checks against a web app. Set `ZSCANNER_ENABLE_ACTIVE_SCAN=true` only for targets you own and have permission to test.
 
 ---
 
@@ -62,8 +64,8 @@ Built with a **Rust/Actix-web** backend and a vanilla **HTML/CSS/JS** frontend, 
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Nikku2716/Z-Scanner.git
-cd Z-Scanner
+git clone https://github.com/Nikku2716/BlackHawk.git
+cd BlackHawk
 ```
 
 ### 2. Start the Services
@@ -76,8 +78,8 @@ This starts two containers:
 
 | Container      | Port | Role                          |
 |----------------|------|-------------------------------|
-| `zscanner-zap` | 8080 | OWASP ZAP daemon              |
-| `zscanner-api` | 8000 | Rust API server + frontend    |
+| `blackhawk-zap` | 8080 | OWASP ZAP daemon              |
+| `blackhawk-api` | 8000 | Rust API server + frontend    |
 
 Wait for the ZAP health check to pass (typically 30–60 seconds on first run).
 
@@ -89,7 +91,7 @@ Enter a target URL (e.g. `http://example.com`), select a scan mode, and click **
 
 ### 4. Scanning Local / LAN Apps
 
-Z-Scanner can scan web apps running on your local machine or LAN:
+BlackHawk can scan web apps running on your local machine or LAN:
 
 | Target Type | URL Example | Notes |
 |---|---|---|
@@ -144,7 +146,7 @@ The frontend is served automatically by the Actix-web backend. Static files are 
 ```bash
 curl -X POST http://localhost:8000/api/scan \
   -H "Content-Type: application/json" \
-  -d '{"target_url": "http://example.com", "scan_mode": "fast"}'
+  -d '{"target_url": "http://example.com", "scan_mode": "stealth"}'
 ```
 
 Response:
@@ -179,7 +181,7 @@ curl "http://localhost:8000/api/export/a1b2c3d4e5f6?format=csv" -o results.csv
 ## Project Structure
 
 ```
-Z-Scanner/
+BlackHawk/
 ├── docker-compose.yml          # Orchestrates ZAP + API containers
 ├── backend/
 │   ├── Cargo.toml              # Rust dependencies
@@ -192,7 +194,7 @@ Z-Scanner/
 └── frontend/
     ├── index.html              # Single-page dashboard
     ├── app.js                  # UI logic + API polling
-    └── style.css               # Cyberpunk/HUD-inspired theme
+    └── style.css               # NewForm editorial theme
 ```
 
 ---
@@ -204,10 +206,12 @@ Z-Scanner/
 | Variable       | Default                | Description            |
 |----------------|------------------------|------------------------|
 | `ZAP_API_URL`  | `http://zap:8080`      | ZAP daemon address     |
+| `ZSCANNER_ENABLE_ACTIVE_SCAN` | `false` | Enables ZAP active scans for Fast/Deep modes |
+| `ZSCANNER_MAX_CONCURRENT_SCANS` | `1` | Maximum number of running scans across all targets |
 
 ### Scan Mode Config
 
-Edit `get_scan_mode_config()` in `backend/src/models.rs` to tune spider threads, attack strength, and alert thresholds per mode.
+Edit `get_scan_mode_config()` in `backend/src/models.rs` to tune spider depth, request delay, time caps, active scan strength, and false-positive filtering. Alerts below Medium confidence are filtered out by default.
 
 ---
 

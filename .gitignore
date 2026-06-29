@@ -1,8 +1,12 @@
 .agent
 .agents
+.gemini
 
 # Rust build artifacts
 backend/target/
+
+# Database
+data/
 
 # IDE
 .idea/

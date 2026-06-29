@@ -9,6 +9,46 @@ use std::sync::Mutex;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // ---------------------------------------------------------------------------
+// Global scanner configuration (parsed from env vars)
+// ---------------------------------------------------------------------------
+#[derive(Debug, Clone)]
+pub struct ScannerConfig {
+    pub alert_threshold: String,
+    pub min_confidence_rank: u8,
+    pub excluded_alerts: Vec<String>,
+    pub alert_fetch_count: u32,
+    pub api_key: Option<String>,
+    pub webhook_url: Option<String>,
+    pub db_path: String,
+    pub spider_threads_quick: u32,
+    pub spider_threads_fast: u32,
+    pub spider_threads_deep: u32,
+    pub spider_delay_quick: u32,
+    pub spider_delay_fast: u32,
+    pub spider_delay_deep: u32,
+}
+
+impl Default for ScannerConfig {
+    fn default() -> Self {
+        Self {
+            alert_threshold: "MEDIUM".to_string(),
+            min_confidence_rank: 2,
+            excluded_alerts: Vec::new(),
+            alert_fetch_count: 5000,
+            api_key: None,
+            webhook_url: None,
+            db_path: "data/scans.db".to_string(),
+            spider_threads_quick: 2,
+            spider_threads_fast: 4,
+            spider_threads_deep: 6,
+            spider_delay_quick: 300,
+            spider_delay_fast: 200,
+            spider_delay_deep: 100,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Scan phase enum
 // ---------------------------------------------------------------------------
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -35,7 +75,10 @@ impl ScanPhase {
     }
 
     pub fn is_terminal(&self) -> bool {
-        matches!(self, ScanPhase::Complete | ScanPhase::Stopped | ScanPhase::Error)
+        matches!(
+            self,
+            ScanPhase::Complete | ScanPhase::Stopped | ScanPhase::Error
+        )
     }
 }
 
@@ -44,43 +87,68 @@ impl ScanPhase {
 // ---------------------------------------------------------------------------
 #[derive(Debug, Clone)]
 pub struct ScanModeConfig {
+    pub run_spider: bool,
     pub spider_thread_count: u32,
     pub spider_max_children: u32,
+    pub request_delay_ms: u32,
+    pub max_scan_secs: u64,
     pub run_active_scan: bool,
-    pub attack_strength: Option<&'static str>,
-    pub alert_threshold: Option<&'static str>,
+    pub attack_strength: Option<String>,
+    pub alert_threshold: Option<String>,
+    pub min_confidence_rank: u8,
+    pub max_alerts: usize,
 }
 
-pub fn get_scan_mode_config(mode: &str) -> ScanModeConfig {
+pub fn get_scan_mode_config(mode: &str, cfg: &ScannerConfig) -> ScanModeConfig {
     match mode {
         "quick" => ScanModeConfig {
-            spider_thread_count: 1,
+            run_spider: true,
+            spider_thread_count: cfg.spider_threads_quick,
             spider_max_children: 5,
+            request_delay_ms: cfg.spider_delay_quick,
+            max_scan_secs: 180,
             run_active_scan: false,
             attack_strength: None,
             alert_threshold: None,
+            min_confidence_rank: cfg.min_confidence_rank,
+            max_alerts: 100,
         },
         "deep" => ScanModeConfig {
-            spider_thread_count: 5,
-            spider_max_children: 0, // 0 = unlimited
+            run_spider: true,
+            spider_thread_count: cfg.spider_threads_deep,
+            spider_max_children: 50,
+            request_delay_ms: cfg.spider_delay_deep,
+            max_scan_secs: 900,
             run_active_scan: true,
-            attack_strength: Some("HIGH"),
-            alert_threshold: Some("LOW"),
+            attack_strength: Some("MEDIUM".to_string()),
+            alert_threshold: Some(cfg.alert_threshold.clone()),
+            min_confidence_rank: cfg.min_confidence_rank,
+            max_alerts: 300,
         },
         "stealth" => ScanModeConfig {
+            run_spider: false,
             spider_thread_count: 1,
-            spider_max_children: 10,
+            spider_max_children: 0,
+            request_delay_ms: 1500,
+            max_scan_secs: 120,
             run_active_scan: false,
             attack_strength: None,
             alert_threshold: None,
+            min_confidence_rank: cfg.min_confidence_rank,
+            max_alerts: 50,
         },
         // "fast" and anything else
         _ => ScanModeConfig {
-            spider_thread_count: 3,
+            run_spider: true,
+            spider_thread_count: cfg.spider_threads_fast,
             spider_max_children: 10,
+            request_delay_ms: cfg.spider_delay_fast,
+            max_scan_secs: 420,
             run_active_scan: true,
-            attack_strength: Some("LOW"),
-            alert_threshold: Some("MEDIUM"),
+            attack_strength: Some("LOW".to_string()),
+            alert_threshold: Some(cfg.alert_threshold.clone()),
+            min_confidence_rank: cfg.min_confidence_rank,
+            max_alerts: 150,
         },
     }
 }
@@ -244,7 +312,7 @@ pub struct ScanRequest {
 }
 
 fn default_scan_mode() -> String {
-    "fast".to_string()
+    "stealth".to_string()
 }
 
 #[derive(Debug, Serialize)]

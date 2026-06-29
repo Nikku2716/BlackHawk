@@ -1,6 +1,6 @@
-/// CWE → OWASP Top 10 (2021) mapping for common vulnerability classes.
-///
-/// Used to enrich ZAP alert data with OWASP category information.
+//! CWE → OWASP Top 10 (2021) mapping for common vulnerability classes.
+//!
+//! Used to enrich ZAP alert data with OWASP category information.
 
 /// Look up the OWASP Top 10 code (e.g. "A01") for a given CWE ID.
 pub fn cwe_to_owasp(cweid: &str) -> &'static str {

@@ -10,6 +10,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Cache dependency compilation: copy manifests first, build a dummy, then swap in real source
 COPY Cargo.toml Cargo.toml
+COPY Cargo.lock Cargo.lock
 RUN mkdir src && echo 'fn main() { println!("dummy"); }' > src/main.rs
 RUN cargo build --release 2>/dev/null || true
 RUN rm -rf src
@@ -28,8 +29,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates libssl3 curl && \
     rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /build/target/release/zscanner-api /app/zscanner-api
+COPY --from=builder /build/target/release/blackhawk-api /app/blackhawk-api
 
-EXPOSE 8000
-
-CMD ["/app/zscanner-api"]
+CMD ["/app/blackhawk-api"]

@@ -9,7 +9,6 @@
         scanBtn:         $("#scanBtn"),
         urlHint:         $("#urlHint"),
         errorMsg:        $("#errorMsg"),
-
         scanInputCard:   $("#scanInputCard"),
         progressCard:    $("#progressCard"),
         resultsCard:     $("#resultsCard"),
@@ -31,6 +30,7 @@
         statTotal:       $("#statTotal"),
         resultsSummary:  $("#resultsSummaryText"),
         filterTabs:      $("#filterTabs"),
+        confFilterTabs:  $("#confFilterTabs"),
         alertsList:      $("#alertsList"),
 
         // Severity chart
@@ -55,12 +55,15 @@
 
         // History
         historyList:     $("#historyList"),
+
+        // Ambient
+        ambientCanvas:   $("#ambientCanvas"),
     };
 
     let currentScanId = null;
     let pollTimer = null;
     let allAlerts = [];
-    let selectedScanMode = "fast";
+    let selectedScanMode = "stealth";
     let stoppingInProgress = false;
     let scanStartTime = null;
     let elapsedInterval = null;
@@ -95,6 +98,155 @@
     }
     updateClock();
     setInterval(updateClock, 1000);
+
+    // ------------------------------------------------------------------
+    // Ambient three.js scene
+    // ------------------------------------------------------------------
+    function initAmbientCanvas() {
+        const canvas = dom.ambientCanvas;
+        if (!canvas || !window.THREE || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+        const scene = new THREE.Scene();
+        const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+        camera.position.z = 300;
+
+        const renderer = new THREE.WebGLRenderer({
+            canvas,
+            alpha: true,
+            antialias: true,
+        });
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        renderer.setSize(window.innerWidth, window.innerHeight);
+
+        const COUNT = 45;
+        const positions = new Float32Array(COUNT * 3);
+        const velocities = [];
+
+        for (let i = 0; i < COUNT; i++) {
+            positions[i * 3] = (Math.random() - 0.5) * 400;
+            positions[i * 3 + 1] = (Math.random() - 0.5) * 400;
+            positions[i * 3 + 2] = (Math.random() - 0.5) * 100;
+            velocities.push({
+                x: (Math.random() - 0.5) * 0.15,
+                y: (Math.random() - 0.5) * 0.12,
+            });
+        }
+
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+
+        const material = new THREE.PointsMaterial({
+            color: 0x2bee4b,
+            size: 2.5,
+            transparent: true,
+            opacity: 0.6,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+        });
+
+        const particles = new THREE.Points(geometry, material);
+        scene.add(particles);
+
+        // Connection lines
+        const lineMat = new THREE.LineBasicMaterial({
+            color: 0x2bee4b,
+            transparent: true,
+            opacity: 0.04,
+            blending: THREE.AdditiveBlending,
+            depthWrite: false,
+        });
+
+        let lineGeo, lines;
+
+        function updateConnections() {
+            const pos = geometry.attributes.position.array;
+            const pairs = [];
+            const maxDist = 220;
+
+            for (let i = 0; i < COUNT; i++) {
+                for (let j = i + 1; j < COUNT; j++) {
+                    const dx = pos[i * 3] - pos[j * 3];
+                    const dy = pos[i * 3 + 1] - pos[j * 3 + 1];
+                    const dz = pos[i * 3 + 2] - pos[j * 3 + 2];
+                    const dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+                    if (dist < maxDist) {
+                        pairs.push(pos[i * 3], pos[i * 3 + 1], pos[i * 3 + 2]);
+                        pairs.push(pos[j * 3], pos[j * 3 + 1], pos[j * 3 + 2]);
+                    }
+                }
+            }
+
+            if (lines) {
+                scene.remove(lines);
+                lines.geometry.dispose();
+            }
+
+            if (pairs.length > 0) {
+                lineGeo = new THREE.BufferGeometry();
+                lineGeo.setAttribute("position", new THREE.Float32BufferAttribute(pairs, 3));
+                lines = new THREE.LineSegments(lineGeo, lineMat);
+                scene.add(lines);
+            } else {
+                lines = null;
+            }
+        }
+
+        updateConnections();
+
+        function animate() {
+            const pos = geometry.attributes.position.array;
+            for (let i = 0; i < COUNT; i++) {
+                pos[i * 3] += velocities[i].x;
+                pos[i * 3 + 1] += velocities[i].y;
+                if (Math.abs(pos[i * 3]) > 200) velocities[i].x *= -1;
+                if (Math.abs(pos[i * 3 + 1]) > 200) velocities[i].y *= -1;
+            }
+            geometry.attributes.position.needsUpdate = true;
+            updateConnections();
+            renderer.render(scene, camera);
+            raf = requestAnimationFrame(animate);
+        }
+
+        let raf = requestAnimationFrame(animate);
+
+        function resize() {
+            const w = window.innerWidth;
+            const h = window.innerHeight;
+            camera.aspect = w / h;
+            camera.updateProjectionMatrix();
+            renderer.setSize(w, h);
+        }
+
+        window.addEventListener("resize", resize);
+
+        document.addEventListener("visibilitychange", () => {
+            if (document.hidden && raf) {
+                cancelAnimationFrame(raf);
+                raf = null;
+            } else if (!document.hidden && !raf) {
+                updateConnections();
+                raf = requestAnimationFrame(animate);
+            }
+        });
+    }
+
+    // Scroll reveal observer
+    // ------------------------------------------------------------------
+    function initScrollReveal() {
+        const els = document.querySelectorAll("[data-reveal-child]");
+        if (!els.length) return;
+
+        const obs = new IntersectionObserver((entries) => {
+            entries.forEach((entry) => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add("reveal-visible");
+                    obs.unobserve(entry.target);
+                }
+            });
+        }, { threshold: 0.15 });
+
+        els.forEach((el) => obs.observe(el));
+    }
 
     // ------------------------------------------------------------------
     // Elapsed timer
@@ -165,6 +317,15 @@
         if (link.classList.contains("nav-link--disabled")) return;
 
         const targetId = link.dataset.target;
+
+        // Scroll-only sections (outside the card toggle system)
+        if (targetId === "capabilities") {
+            const el = document.getElementById(targetId);
+            if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+            setNavActive(targetId);
+            return;
+        }
+
         const card = sectionCards[targetId];
         if (!card) return;
 
@@ -219,16 +380,16 @@
         dom.scanPhaseLabel.querySelector("span:last-child").textContent = text;
 
         if (phase === "complete") {
-            dot.style.background = "var(--color-success)";
+            dot.style.background = "var(--color-risk-low)";
             dot.style.animation = "none";
         } else if (phase === "error") {
             dot.style.background = "var(--color-risk-high)";
             dot.style.animation = "none";
         } else if (phase === "stopped") {
-            dot.style.background = "var(--color-risk-med)";
+            dot.style.background = "var(--color-risk-medium)";
             dot.style.animation = "none";
         } else {
-            dot.style.background = "var(--color-accent)";
+            dot.style.background = "var(--color-voltage)";
             dot.style.animation = "";
         }
     }
@@ -427,9 +588,9 @@
         stoppingInProgress = false;
         dom.targetUrl.value = "";
         dom.errorMsg.textContent = "";
-        selectedScanMode = "fast";
+        selectedScanMode = "stealth";
         $$(".mode-card").forEach((m) => m.classList.remove("mode-card--active"));
-        $(".mode-card[data-mode='fast']").classList.add("mode-card--active");
+        $(".mode-card[data-mode='stealth']").classList.add("mode-card--active");
 
         // Reset nav — Scan and History available
         resetNavLinks();
@@ -498,11 +659,13 @@
                     </div>`;
             }
 
+            const confClass = a.confidence ? `alert-item__conf--${a.confidence.toLowerCase()}` : '';
             return `
             <div class="alert-item" data-index="${i}">
                 <div class="alert-item__header" role="button" tabindex="0" aria-expanded="false">
                     <span class="alert-item__badge alert-item__badge--${a.risk}">${a.risk}</span>
                     <span class="alert-item__name">${escapeHtml(a.name)}</span>
+                    ${a.confidence ? `<span class="alert-item__conf ${confClass}">${escapeHtml(a.confidence)}</span>` : ""}
                     ${urlCount > 1 ? `<span class="alert-item__url-count">${urlCount} URLs</span>` : ""}
                     ${a.owasp_code ? `<span class="alert-item__owasp">${escapeHtml(a.owasp_code)}</span>` : ""}
                     <svg class="alert-item__chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
@@ -539,36 +702,86 @@
     }
 
     function resetFilterTabs() {
-        $$(".filter-btn").forEach((t) => t.classList.remove("active"));
-        $(".filter-btn[data-filter='all']").classList.add("active");
+        $$("#filterTabs .filter-btn").forEach((t) => t.classList.remove("active"));
+        $("#filterTabs .filter-btn[data-filter='all']").classList.add("active");
+        $$("#confFilterTabs .filter-btn").forEach((t) => t.classList.remove("active"));
+        $("#confFilterTabs .filter-btn[data-conf='all']").classList.add("active");
+        currentConfidenceFilter = "all";
+    }
+
+    let currentConfidenceFilter = "all";
+
+    function getFilteredAlerts() {
+        const riskFilter = $("#filterTabs .filter-btn.active")?.dataset?.filter || "all";
+        let filtered = riskFilter === "all"
+            ? allAlerts
+            : allAlerts.filter((a) => a.risk === riskFilter);
+        if (currentConfidenceFilter !== "all") {
+            filtered = filtered.filter((a) => a.confidence === currentConfidenceFilter);
+        }
+        return filtered;
     }
 
     function handleFilter(e) {
         const tab = e.target.closest(".filter-btn");
         if (!tab) return;
 
-        $$(".filter-btn").forEach((t) => t.classList.remove("active"));
-        tab.classList.add("active");
+        if (tab.closest("#confFilterTabs")) {
+            $$("#confFilterTabs .filter-btn").forEach((t) => t.classList.remove("active"));
+            tab.classList.add("active");
+            currentConfidenceFilter = tab.dataset.conf || "all";
+        } else {
+            $$("#filterTabs .filter-btn").forEach((t) => t.classList.remove("active"));
+            tab.classList.add("active");
+        }
 
-        const filter = tab.dataset.filter;
-        const filtered = filter === "all"
-            ? allAlerts
-            : allAlerts.filter((a) => a.risk === filter);
-        renderAlerts(filtered);
+        renderAlerts(getFilteredAlerts());
     }
 
     function handleAlertToggle(e) {
         const header = e.target.closest(".alert-item__header");
         if (!header) return;
         const item = header.closest(".alert-item");
-        item.classList.toggle("open");
-        header.setAttribute("aria-expanded", item.classList.contains("open"));
+        const body = item.querySelector(".alert-item__body");
+        const isOpen = item.classList.contains("open");
+
+        if (isOpen) {
+            // Collapse: animate max-height to 0
+            body.style.maxHeight = body.scrollHeight + "px";
+            requestAnimationFrame(() => {
+                body.style.maxHeight = "0";
+            });
+            item.classList.remove("open");
+            header.setAttribute("aria-expanded", "false");
+        } else {
+            // Expand: set max-height to scrollHeight then auto
+            item.classList.add("open");
+            header.setAttribute("aria-expanded", "true");
+            body.style.maxHeight = body.scrollHeight + "px";
+            body.addEventListener("transitionend", function handler() {
+                body.style.maxHeight = "none";
+                body.removeEventListener("transitionend", handler);
+            });
+        }
     }
 
     // ------------------------------------------------------------------
     // History
     // ------------------------------------------------------------------
+    function renderHistorySkeletons() {
+        dom.historyList.innerHTML = Array.from({ length: 3 }, () => `
+            <div class="history-skeleton">
+                <span class="history-skeleton__dot"></span>
+                <div class="history-skeleton__lines">
+                    <div class="history-skeleton__line history-skeleton__line--long"></div>
+                    <div class="history-skeleton__line history-skeleton__line--short"></div>
+                </div>
+                <span class="history-skeleton__badge"></span>
+            </div>`).join("");
+    }
+
     async function loadHistory() {
+        renderHistorySkeletons();
         try {
             const history = await apiGet("/api/history");
             renderHistory(history);
@@ -614,7 +827,7 @@
         }).join("");
     }
 
-    function handleHistoryClick(e) {
+    async function handleHistoryClick(e) {
         const item = e.target.closest(".history-item");
         if (!item) return;
         const scanId = item.dataset.scanId;
@@ -622,7 +835,7 @@
 
         // Load results for this scan
         currentScanId = scanId;
-        showResults();
+        await showResults();
     }
 
     // ------------------------------------------------------------------
@@ -664,6 +877,7 @@
     dom.retryBtn.addEventListener("click", resetScan);
 
     dom.filterTabs.addEventListener("click", handleFilter);
+    dom.confFilterTabs.addEventListener("click", handleFilter);
     dom.alertsList.addEventListener("click", handleAlertToggle);
 
     dom.alertsList.addEventListener("keydown", (e) => {
@@ -690,6 +904,23 @@
 
     // Load history on start
     loadHistory();
+
+    // Init ambient background animation
+    initAmbientCanvas();
+
+    // Init scroll reveal observer
+    initScrollReveal();
+
+    // Hero headline staggered entrance animation
+    function revealHeroText() {
+        const lines = document.querySelectorAll("[data-text-line]");
+        lines.forEach((line, i) => {
+            setTimeout(() => {
+                line.classList.add("text-revealed");
+            }, 200 + i * 200);
+        });
+    }
+    revealHeroText();
 
     dom.targetUrl.focus();
 })();

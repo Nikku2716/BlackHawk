@@ -1,11 +1,11 @@
 [package]
-name = "zscanner-api"
+name = "blackhawk-api"
 version = "1.0.0"
 edition = "2021"
-description = "Z-Scanner — Web Application Security Scanner backend powered by OWASP ZAP"
+description = "BlackHawk — Web Application Vulnerability Scanner backend powered by OWASP ZAP"
 
 [[bin]]
-name = "zscanner-api"
+name = "blackhawk-api"
 path = "src/main.rs"
 
 [dependencies]
@@ -18,6 +18,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 uuid = { version = "1", features = ["v4"] }
 csv = "1"
+rusqlite = { version = "0.31", features = ["bundled"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
 
