@@ -1,4 +1,5 @@
 <div align="center">
+  <img src="Screenshots/Screenshot1.png" alt="BlackHawk Dashboard" width="800"/>
   <br/>
   <img src="https://img.shields.io/badge/status-active-success?style=flat-square" alt="Status"/>
   <img src="https://img.shields.io/badge/license-GPLv3-blue?style=flat-square" alt="License"/>
