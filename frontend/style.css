@@ -644,7 +644,7 @@
   .scan-input__field {
     display: flex;
     align-items: stretch;
-    background: var(--surface-card);
+    background: var(--surface-input);
     border-radius: 20px;
     overflow: hidden;
     border: 2px solid var(--color-mist);
@@ -694,10 +694,7 @@
   }
 
   .scan-input__field .btn--primary:hover {
-    box-shadow: none;
-    transform: none;
-    background: var(--color-voltage);
-    color: var(--color-obsidian-ink);
+    transform: translateY(-2px);
   }
 
   .scan-input__field .btn--primary:active {
